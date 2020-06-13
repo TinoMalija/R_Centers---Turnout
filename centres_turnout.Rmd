@@ -1,0 +1,237 @@
+---
+title: "Vote Centers and turnout by election type in Texas"
+author: "Augustine Malija"
+date: "6/4/2020"
+output: html_document
+---
+# Overview
+I using replicaton data available from Havard Dataverse, I replicate Table 1,2 and 3. I then explore the parallel trends assumption put forth through plotting.
+
+## Loading Libraries
+```{r, message=FALSE,warning=FALSE}
+library(haven)
+library(dplyr)
+library(plm)
+library(stargazer)
+library(MatchIt)
+library(ggplot2)
+library(directlabels)
+
+options(scipen = 999)
+set.seed(123)
+```
+
+## Reading Datasets
+```{r}
+vote_data <- haven::read_dta("Rottinghaus_Cortina_Vote Centers and Turnout by Election Type in Texas_Data.dta")
+
+parallel <- haven::read_dta("Rottinghaus_Cortina_Vote Centers and Turnout by Election Type in Texas_Parallel Assumption Data.dta")
+```
+
+## Data Wrangling
+```{r}
+vote_data <- vote_data %>%
+  #assigning bonary variables to 2016 and 2012
+  mutate(pt=case_when(.$year==2016~1,
+                      .$year==2012~0)) %>%
+  #assigning binary variables
+  mutate(mt=case_when(.$year==2018~1,
+                      .$year==2010~0)) %>%
+  #assigning binary variables
+  mutate(ct=case_when(.$year==2017~1,
+                      .$year==2009~0)) %>%
+  #assigning binary variables
+  mutate(c3=case_when(.$year==2011~1,
+                      .$year==2009~0)) %>%
+  #assigning binary varibles
+  mutate(c4=case_when(.$year==2017~1,
+                      .$year==2011~0)) %>% 
+  #assigning c1 binary variable
+  mutate(c1=case_when(.$year==2017~1,
+                      .$year==2015~0))
+  
+```
+
+## Regressions
+```{r}
+#For Table 1
+presidential <- plm(turnout~votecenter+pt+votecenter*pt+medianinc_rec+bachelor_higher+totalpop_rec, data = vote_data, index = c("County"), model = "within")
+
+midterm <- plm(turnout~votecenter+mt+votecenter*mt+medianinc_rec+bachelor_higher+totalpop_rec, data = vote_data, index = "County", model = "within")
+
+constitutional <- plm(turnout~votecenter+ct+votecenter*ct+medianinc_rec+bachelor_higher+totalpop_rec, data = vote_data, index = "County", model = "within")
+
+#For Table 2
+const_2011 <- plm(turnout~votecenter+c3+votecenter*c3+medianinc_rec+bachelor_higher+totalpop_rec, data = vote_data, index = "County", model = "within")
+
+const_2017 <- plm(turnout~votecenter+c4+votecenter*c4+medianinc_rec+bachelor_higher+totalpop_rec, data = vote_data, index = "County", model = "within")
+
+const_1517 <- plm(turnout~votecenter+c1+votecenter*c1+medianinc_rec+bachelor_higher+totalpop_rec, data = vote_data, index = "County", model = "within")
+
+```
+
+## Table 1
+```{r, results='asis'}
+
+stargazer(presidential, midterm, constitutional,
+          type = "html", 
+          title= "Table 1. Differential impact of vote center on elections", 
+          column.labels = c("2012-2016", "2010-2018", "2009-2017"),
+          multicolumn = FALSE,
+          dep.var.labels   = c("Presidential", "Midterm", "Constitutional"),
+          model.numbers = FALSE, 
+          order = c(1,2,8,3,9,4,10,5,6,7), 
+         covariate.labels = c("Vote center (1 = yes/0 = no)", 
+                               "Time P (1 = 2016/0 = 2012)",   
+                               "Time P* Vote center",
+                               "Time M (1 = 2018/0 = 2010)",
+                               "Time M* Vote center",
+                               "Time C (1 = 2017/0 = 2009)",
+                               "Time C* Vote center",
+                               "Median income",
+                               "Bachelor’s degree or higher",
+                               "Total population"),
+          dep.var.caption = c(""),
+          notes = c("Standard errors given in parentheses.",
+                    "*** p < 0.01, ** p < 0.05, * p < 0.1.",
+                    "Population scaled to 1,000,000 and income scaled to 10,000."),
+          notes.append = FALSE,
+          notes.label =" ",
+          notes.align = "r",
+          omit.stat = c("adj.rsq", "f"),
+          add.lines = list(c("Number of counties", "254", "254", "254"))
+          )
+
+```
+
+## Table 2
+```{r, results='asis'}
+stargazer(const_2011, const_2017, const_1517,
+          type = "html", 
+          title= "Table 2. Different impact of vote centers", 
+          column.labels = c("2009-2011", "2011-2017", "2015-2017"),
+          multicolumn = FALSE,
+          dep.var.labels   = c("Constitutional", "Constitutional", "Constitutional"),
+          model.numbers = FALSE, 
+          order = c(1,2,8,3,9,4,10,5,6,7), 
+          covariate.labels = c("Vote center (1 = yes/0 = no)", 
+                               "Time C1 (1 = 2011/0 = 2009)",   
+                               "Time C1* Vote center",
+                               "Time C2 (1 = 2017/0 = 2011)",
+                               "Time C2* Vote center",
+                               "Time C3 (1 = 2017/0 = 2015)",
+                               "Time C3* Vote center",
+                               "Median income",
+                               "Bachelor’s degree or higher",
+                               "Total population"),
+          dep.var.caption = c(""),
+          notes = c("Standard errors given in parentheses.",
+                    "*** p < 0.01, ** p < 0.05, * p < 0.1.",
+                    "Population scaled to 1,000,000 and income scaled to 10,000."),
+          notes.append = FALSE,
+          notes.label =" ",
+          notes.align = "r",
+          omit.stat = c("adj.rsq", "f"),
+          add.lines = list(c("Number of counties", "254", "254", "254"))
+          )
+```
+
+```{r}
+#subseting data per election type in preparation for prepensity scores matching
+ps_match_pt <- vote_data %>% 
+          select(turnout, votecenter, medianinc_rec, bachelor_higher, totalpop_rec, pt) %>% 
+          na.omit()
+ps_match_mt <- vote_data %>% 
+          select(turnout, votecenter, medianinc_rec, bachelor_higher, totalpop_rec, mt) %>% 
+          na.omit()
+ps_match_ct <- vote_data %>% 
+          select(turnout, votecenter, medianinc_rec, bachelor_higher, totalpop_rec, ct) %>% 
+          na.omit()
+
+#performing matching 
+match_pt <- matchit(votecenter ~ medianinc_rec + bachelor_higher + totalpop_rec,
+                     method = "nearest",
+                     distance = "probit",
+                     ratio = 1, 
+                     replace = TRUE,
+                     data = ps_match_pt)
+
+match_mt <- matchit(votecenter ~ medianinc_rec + bachelor_higher + totalpop_rec,
+                     method = "nearest",
+                     distance = "probit",
+                     ratio = 1, 
+                     replace = TRUE,
+                     data = ps_match_mt)
+match_ct <- matchit(votecenter ~ medianinc_rec + bachelor_higher + totalpop_rec,
+                     method = "nearest", 
+                     distance = "probit",
+                     ratio = 1, 
+                     replace = TRUE,
+                     data = ps_match_ct)
+
+#grabbing our matched data
+pt_matched <- match.data(match_pt)
+
+mt_matched <- match.data(match_mt)
+
+ct_matched <- match.data(match_ct)
+
+#matched regressions
+table_3_column_1 <- lm(turnout ~ votecenter + pt + votecenter*pt + medianinc_rec + bachelor_higher + totalpop_rec, data = pt_matched)
+
+table_3_column_2 <- lm(turnout ~ votecenter + mt + votecenter*mt + medianinc_rec + bachelor_higher + totalpop_rec, data = mt_matched)
+
+table_3_column_3 <- lm(turnout ~ votecenter + ct + votecenter*ct + medianinc_rec + bachelor_higher + totalpop_rec, data = ct_matched)
+
+```
+
+## Table 3
+```{r, results='asis'}
+stargazer(table_3_column_1,table_3_column_2,table_3_column_3, 
+          type = "html",
+          title = "Table 3. Robustness check with propensity score matching.",
+          order = c(1,2,8,3,9,4,10,5,6,7),
+          model.numbers = FALSE,
+          covariate.labels = c("Vote center (1 = yes/0 = no)", 
+                               "Time P (1 = 2016/0 = 2012)",   
+                               "Time P* Vote center",
+                               "Time M (1 = 2018/0 = 2010)",
+                               "Time M* Vote center",
+                               "Time C (1 = 2017/0 = 2009)",
+                               "Time C* Vote center",
+                               "Median income",
+                               "Bachelor’s degree or higher",
+                               "Total population"),
+          column.labels = c("2012-2016", "2010-2018", "2009-2017"),
+          multicolumn = FALSE,
+          dep.var.labels   = c("Presidential", "Midterm", "Constitutional"),
+          dep.var.caption = "",
+          omit.stat = c("f", "adj.rsq", "ser"),
+          notes = c("Standard errors given in parentheses.",
+                    "*** p < 0.01, ** p < 0.05, * p < 0.1.",
+                    "Population scaled to 1,000,000 and income scaled to 10,000."),
+          notes.append = FALSE,
+          notes.label =" ",
+          notes.align = "r",
+          add.lines = list(c("Number of counties", "254", "254", "254"))
+          )
+```
+## Parallel Trends
+```{r}
+#summarizing data for parallel trends
+parallel_trend <- vote_data %>% 
+                 group_by(year, votecenter, election) %>% 
+                 summarise(mean_turnout = mean(turnout))
+
+#plotting
+ggplot(parallel_trend, 
+       aes(x=year, y=mean_turnout,group=interaction(election, votecenter))) +
+       geom_line(aes(color=factor(votecenter))) +
+       theme_classic() +
+       labs(title = "Turnout in Counties with and without Vote Centers", x = "Year", y = "Turnout") +
+       scale_colour_discrete(name = "", labels = c("Non-vote center counties", "Vote center counties")) +
+       theme(legend.position="bottom",
+             legend.text = element_text(size = 12)) + 
+       geom_dl(aes(label = election), method = "lasso.labels")
+```
+

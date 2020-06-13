@@ -1,0 +1,3 @@
+Rottinghaus_Cortina_Vote Centers and Turnout by Election Type in Texas_Data.dta (application/x-stata-14) 223854 bytes.
+Rottinghaus_Cortina_Vote Centers and Turnout by Election Type in Texas_DO File.do (application/x-stata-syntax) 2910 bytes.
+Rottinghaus_Cortina_Vote Centers and Turnout by Election Type in Texas_Parallel Assumption Data.dta (application/x-stata-14) 3484 bytes.
